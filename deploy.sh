@@ -32,17 +32,49 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+DARWIN_AMD_GCLOUD="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-darwin-arm.tar.gz"
+DARWIN_X86_GCLOUD="https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-darwin-x86_64.tar.gz"
+
 # Check if gcloud is installed
 if ! command_exists gcloud; then
-    echo "Error: gcloud is not installed. Please install the Google Cloud SDK."
-    echo "    You can download it from: https://cloud.google.com/sdk/"
-    exit 1
+    platform=$(uname -a)
+    if [[ $platform == *"Linux"* ]]; then
+        echo "Error: gcloud is not installed. Please install it by running 'sudo apt-get install google-cloud-sdk'."
+    elif [[ $platform == *"Darwin"* ]]; then
+        echo "Would you like to download gcloud for Mac? (Y/n)"
+        read -r download_response
+        if [ -z "$download_response" ] || [[ $download_response =~ ^[Yy]$ ]]; then
+            if [[ $platform == *"arm"* ]]; then
+                echo "Downloading gcloud for Apple Silicon..."
+                curl -O $DARWIN_AMD_GCLOUD
+                tar -xvf google-cloud-cli-darwin-arm.tar.gz ~/google-cloud-sdk
+            else
+                echo "Downloading gcloud for Intel Mac..."
+                curl -O $DARWIN_X86_GCLOUD
+                tar -xvf google-cloud-cli-darwin-x86_64.tar.gz ~/google-cloud-sdk
+            fi
+            echo "Installing gcloud..."
+            ~/google-cloud-sdk/install.sh
+            export PATH=$PATH:~/google-cloud-sdk/bin
+            echo "gcloud installed successfully!"
+        else
+            echo "Error: gcloud is not installed. Please install it from https://cloud.google.com/sdk/docs/install."
+        fi
+    else
+        echo "Error: gcloud is not installed. Please install it from https://cloud.google.com/sdk/docs/install."
+    fi
 fi
 
 # Check if the user is logged in
 if ! gcloud auth list --filter=status:ACTIVE --format="value(account)" | grep -q '@'; then
-    echo "Error: You are not logged in to gcloud. Please run 'gcloud auth login' first."
-    exit 1
+    echo "You are not logged into gcloud would you like to login? (Y/n)"
+    read -r login_response
+    if [ -z "$login_response" ] || [[ $login_response =~ ^[Yy]$ ]]; then
+        gcloud auth login
+    else
+        echo "Please login to gcloud and try again."
+        exit 1
+    fi
 fi
 
 # Get the project ID
@@ -50,15 +82,49 @@ PROJECT_ID=$(gcloud config get-value project)
 echo "Using GCP Project ID: $PROJECT_ID"
 
 if [ -z "$PROJECT_ID" ]; then
-    echo "Error: No project ID found. Please run 'gcloud config set project YOUR_PROJECT_ID' first."
-    exit 1
+    echo "Default project not found. Which project would you like to use?"
+    `gcloud projects list`
+    printf "Enter Project ID: "
+    read -r PROJECT_ID
+    allowed_projects=$(gcloud projects list --format="value(projectId)")
+    while ! echo "$allowed_projects" | grep -q "$PROJECT_ID"; do
+        echo "Error: Project ID not found. Please enter a valid Project ID."
+        printf "Enter Project ID: "
+        read -r PROJECT_ID
+    done
 fi
 
-# Check if App Engine is enabled
-if ! gcloud services list --enabled | grep -q 'run.googleapis.com'; then
-    echo "Error: App Engine is not enabled for this project. Please enable it in the Google Cloud Console."
-    echo "You can enable it by visiting: https://console.cloud.google.com/apis/library/run.googleapis.com?project=$PROJECT_ID"
-    exit 1
+approved_services=$(gcloud services list --enabled)
+has_cloud_run=$(echo "$approved_services" | grep -q 'run.googleapis.com')
+has_cloud_build=$(echo "$approved_services" | grep -q 'cloudbuild.googleapis.com')
+
+if ! $has_cloud_build || ! $has_cloud_run; then
+    $missing_services=""
+    if ! $has_cloud_run; then
+        missing_services+="Cloud Run"
+    fi
+    if ! $has_cloud_build; then
+        if [ -z "$missing_services" ]; then
+            missing_services+="Cloud Build"
+        else
+            missing_services+="and Cloud Build"
+        fi
+    fi
+    missing_services+="APIs are required for this script. Do you want to enable them? (Y/n)"
+    read -r enable_response
+    if [ -z "$enable_response" ] || [[ $enable_response =~ ^[Yy]$ ]]; then
+        if ! $has_cloud_run; then
+            echo "Enabling Cloud Run API..."
+            gcloud services enable run.googleapis.com
+        fi
+        if ! $has_cloud_build; then
+            echo "Enabling Cloud Build API..."
+            gcloud services enable cloudbuild.googleapis.com
+        fi
+    else
+        echo "Cloud Run is required for this script. Please enable it and try again."
+        exit 1
+    fi
 fi
 
 # Function to parse credentials
@@ -174,13 +240,20 @@ check_existing_deployment() {
 # Function to deploy the app
 deploy_app() {
     echo "Building your CloudRun application..."
-    gcloud builds submit --tag gcr.io/${PROJECT_ID}/${SERVICE_NAME}
+    $attempt = 0
+    gcloud builds submit --tag gcr.io/${PROJECT_ID}/${SERVICE_NAME} .;
     
     res=$?
-    if [ $res -ne 0 ]; then
-        echo "Build failed. Please check your app configuration and try again."
-        return 1
-    fi
+    while [ $res -ne 0 ]; do
+        if [ $attempt -eq 10 ]; then
+            echo "Failed to build the application. Please check your configuration and try again."
+            return 1
+        fi
+        echo "Build failed. Retrying..."
+        gcloud builds submit --tag gcr.io/${PROJECT_ID}/${SERVICE_NAME} .
+        res=$?
+        attempt=$((attempt + 1))
+    done
 
     echo "Deploying your CloudRun application..."
     if gcloud run deploy $SERVICE_NAME --image gcr.io/${PROJECT_ID}/${SERVICE_NAME} --region $REGION --env-vars-file=appsecrets.yaml --allow-unauthenticated; then
@@ -236,9 +309,9 @@ fi
 
 if check_existing_deployment; then
     echo "Deployment found"
-    echo "Do you want to update your existing deployment? (y/n)"
+    echo "Do you want to update your existing deployment? (Y/n)"
     read -r update_response
-    if [[ $update_response =~ ^[Yy]$ ]]; then
+    if [ -z "$update_response" ] || [[ $update_response =~ ^[Yy]$ ]]; then
         if deploy_app; then
             get_and_print_domain
         fi
@@ -248,9 +321,9 @@ if check_existing_deployment; then
     fi
 else
     echo "No existing deployment found."
-    echo "Do you want to deploy your application to cloud run? (y/n)"
+    echo "Do you want to deploy your application to cloud run? (Y/n)"
     read -r deploy_response
-    if [[ $deploy_response =~ ^[Yy]$ ]]; then
+    if [ -z "$deploy_response" ] || [[ $deploy_response =~ ^[Yy]$ ]]; then
         if deploy_app; then
             get_and_print_domain
         fi
@@ -258,5 +331,3 @@ else
         echo "Skipping deployment. Exiting..."
     fi
 fi
-
-
