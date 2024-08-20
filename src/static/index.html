@@ -19,7 +19,7 @@
        </div>
        <div id="description">
             <p class="poppins-regular">Welcome to the Magical Auth Quickstart. The first step is to initiate a verificatication request to retrieve the device identification url.</p>
-            <p class="poppins-regular">Enter a phone number below to start the verification process, you can use the test number <b>+555123456789</b> or your own</p>
+            <p class="poppins-regular">Enter a phone number below to start the verification process, you can use the test number <b id="testNumber">+555123456789</b> or your own</p>
         </div>
         <div id="authBtn">
             <input type="text" id="phone" placeholder="+555123456789" />
@@ -68,6 +68,7 @@
         const verificationResultText = document.getElementById('verificationResultText');
         const sendingToServer = document.getElementById('sendingToServer');
         const glideLogo = document.getElementById('glideLogo');
+        const testNumber = document.getElementById('testNumber');
 
         let verificationRes = null;
 
@@ -102,6 +103,9 @@
                 const htmlToDisplay = htmlForObject(verificationRes);
                 responseText.innerHTML = htmlToDisplay;
                 response.classList.add('visible');
+                if (!verificationRes.authUrl) {
+                    return;
+                }
                 setTimeout(() => {
                     showStepTwo();
                 }, 1000);
@@ -242,6 +246,15 @@
                         sendTokenToServer(tokenVal);
                     }, 1000);
             }
+        });
+
+        testNumber.addEventListener('click', () => {
+            phone.value = testNumber.innerText;
+            const event = new Event('input', {
+                bubbles: true,
+                cancelable: true,
+            });
+            phone.dispatchEvent(event);
         });
     </script>
 </body>

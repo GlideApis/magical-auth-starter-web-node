@@ -257,6 +257,10 @@ pre {
     z-index: -1;
 }
 
+#testNumber {
+    cursor: pointer;
+}
+
 @media (max-width: 600px) {
     .particle {
         z-index: 1;

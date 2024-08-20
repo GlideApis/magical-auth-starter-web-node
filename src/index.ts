@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import express from 'express';
 import { GlideClient } from 'glide-sdk';
+import { FallbackVerificationChannel } from 'glide-sdk/dist/src/services/magic-auth';
 
 const PORT = process.env.PORT || 4567;
 
@@ -25,6 +26,7 @@ app.post('/api/start-verification', async (req, res) => {
             phoneNumber,
             state: sessionId,
             redirectUrl: process.env.MAGIC_REDIRECT_URI || `http://localhost:${PORT}/`,
+            fallbackChannel: FallbackVerificationChannel.NO_FALLBACK,
         });
         res.json(authRes);
     } catch (error) {
