@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Magical Auth Quickstart</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <div id="appCard">
+       <div id="header">
+            <div id="logo">
+                <img id="glideLogo" src="/glide_logo.png" alt="Glide" />
+            </div>
+            <h1 class="poppins-bold">Magical Auth Quickstart</h1>
+       </div>
+       <div id="description">
+            <p class="poppins-regular">Welcome to the Magical Auth Quickstart. The first step is to initiate a verificatication request to retrieve the device identification url.</p>
+            <p class="poppins-regular">Enter a phone number below to start the verification process, you can use the test number <b>+555123456789</b> or your own</p>
+        </div>
+        <div id="authBtn">
+            <input type="text" id="phone" placeholder="+555123456789" />
+            <button id="loginBtn" class="btn poppins-semibold disabled">Start Verification</button>
+        </div>
+        <div id="response" class="hidden">
+            <p class="poppins-regular">Response:</p>
+            <code><pre id="responseText"></pre></code>
+        </div>
+        <div id="stepTwo" class="paragraphHidden">
+            <p class="poppins-regular">The next step is to follow the authentication flow using one of the following methods:</p>
+            <div id="followBtnContainer">
+                <button id="followFrameBtn" class="btn poppins-semibold">Background Frame</button>
+                <button id="followPopupBtn" class="btn poppins-semibold">Popup</button>
+                <button id="followRedirectBtn" class="btn poppins-semibold">Redirect</button>
+            </div>
+        </div>
+        <div id="token" class="hidden">
+            <p class="poppins-regular">Token:</p>
+            <code><pre id="tokenText"></pre></code>
+        </div>
+        <div id="stepThree" class="paragraphHidden">
+            <p class="poppins-regular">The final step is to send the token to your backend server to verify the user's identity.</p>
+            <p id="sendingToServer" class="statusBadge poppins-bold">Sending to Server...</p>
+        </div>
+        <div id="verificationResult" class="hidden">
+            <p class="poppins-regular">Verification Result:</p>
+            <code><pre id="verificationResultText"></pre></code>
+        </div>
+    </div>
+    <script src="/utils.js"></script>
+    <script>
+        const header = document.getElementById('header');
+        const phone = document.getElementById('phone');
+        const loginBtn = document.getElementById('loginBtn');
+        const response = document.getElementById('response');
+        const responseText = document.getElementById('responseText');
+        const stepTwo = document.getElementById('stepTwo');
+        const followFrameBtn = document.getElementById('followFrameBtn');
+        const followPopupBtn = document.getElementById('followPopupBtn');
+        const followRedirectBtn = document.getElementById('followRedirectBtn');
+        const token = document.getElementById('token');
+        const tokenText = document.getElementById('tokenText');
+        const stepThree = document.getElementById('stepThree');
+        const verificationResult = document.getElementById('verificationResult');
+        const verificationResultText = document.getElementById('verificationResultText');
+        const sendingToServer = document.getElementById('sendingToServer');
+        const glideLogo = document.getElementById('glideLogo');
+
+        let verificationRes = null;
+
+        header.addEventListener('click', () => {
+            window.location.href = '/';
+        });
+
+        phone.addEventListener('input', () => {
+            const phoneFormat = /^[+][0-9]+$/;
+            const isValidPhone = phone.value.match(phoneFormat);
+            if (phone.value.length > 8 && isValidPhone) {
+                loginBtn.classList.remove('disabled');
+            } else {
+                loginBtn.classList.add('disabled');
+            }
+        });
+
+        loginBtn.addEventListener('click', async () => {
+            if (loginBtn.classList.contains('disabled')) return;
+            loginBtn.classList.add('loading');
+            loginBtn.defaultText = loginBtn.innerText;
+            loginBtn.innerText = 'Loading...';
+            try {
+                const res = await fetch('/api/start-verification', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ phoneNumber: phone.value })
+                });
+                verificationRes = await res.json();
+                const htmlToDisplay = htmlForObject(verificationRes);
+                responseText.innerHTML = htmlToDisplay;
+                response.classList.add('visible');
+                setTimeout(() => {
+                    showStepTwo();
+                }, 1000);
+            } catch (error) {
+                console.error(error);
+            } finally {
+                loginBtn.classList.remove('loading');
+                loginBtn.innerText = loginBtn.defaultText;
+            }
+        });
+
+        function showStepTwo() {
+            stepTwo.classList.add('visible');
+        }
+
+        followFrameBtn.addEventListener('click', () => {
+            if (followFrameBtn.classList.contains('disabled')) return;
+            followFrameBtn.classList.add('loading');
+            followFrameBtn.defaultText = followFrameBtn.innerText;
+            followFrameBtn.innerText = 'Loading...';
+            followPopupBtn.classList.add('disabled');
+            followRedirectBtn.classList.add('disabled');
+            const iframe = document.createElement('iframe');
+            iframe.src = verificationRes.flatAuthUrl;
+            iframe.style.width = '0px';
+            iframe.style.height = '0px';
+            const messageListener = (event) => {
+                if (event.origin === "https://api.gateway-x.io") {
+                    window.removeEventListener('message', messageListener);
+                    const authRes = JSON.parse(event.data);
+
+                    followFrameBtn.classList.remove('loading');
+                    followFrameBtn.innerText = followFrameBtn.defaultText;
+
+                    tokenText.innerHTML = authRes.token;
+                    token.classList.add('visible');
+
+                    setTimeout(() => {
+                        stepThree.classList.add('visible');
+                        sendingToServer.style.display = 'block';
+                        sendTokenToServer(authRes.token);
+                    }, 1000);
+                }
+            };
+            window.addEventListener('message', messageListener);
+            document.body.appendChild(iframe);
+        });
+
+        followPopupBtn.addEventListener('click', () => {
+            if (followPopupBtn.classList.contains('disabled')) return;
+            followPopupBtn.classList.add('loading');
+            followPopupBtn.defaultText = followPopupBtn.innerText;
+            followPopupBtn.innerText = 'Loading...';
+            followFrameBtn.classList.add('disabled');
+            followRedirectBtn.classList.add('disabled');
+            const popup = window.open(verificationRes.flatAuthUrl, 'authPopup', 'width=600,height=600');
+            const messageListener = (event) => {
+                console.log(event);
+                if (event.origin === "https://api.gateway-x.io") {
+                    window.removeEventListener('message', messageListener);
+                    const authRes = JSON.parse(event.data);
+                    popup.close();
+
+                    followPopupBtn.classList.remove('loading');
+                    followPopupBtn.innerText = followPopupBtn.defaultText;
+
+                    tokenText.innerHTML = authRes.token;
+                    token.classList.add('visible');
+
+                    setTimeout(() => {
+                        stepThree.classList.add('visible');
+                        sendingToServer.style.display = 'block';
+                        sendTokenToServer(authRes.token);
+                    }, 1000);
+                }
+            };
+            window.addEventListener('message', messageListener);
+        });
+
+        followRedirectBtn.addEventListener('click', () => {
+            if (followRedirectBtn.classList.contains('disabled')) return;
+            followRedirectBtn.classList.add('loading');
+            followRedirectBtn.defaultText = followRedirectBtn.innerText;
+            followRedirectBtn.innerText = 'Loading...';
+            followFrameBtn.classList.add('disabled');
+            followPopupBtn.classList.add('disabled');
+            window.location.href = verificationRes.authUrl;
+        });
+
+        async function sendTokenToServer(token) {
+            try {
+                const res = await fetch('/api/check-verification', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ token, phoneNumber: phone.value })
+                });
+                sendingToServer.style.display = 'none';
+                const serverRes = await res.json();
+                const htmlToDisplay = htmlForObject(serverRes);
+                verificationResultText.innerHTML = htmlToDisplay;
+                verificationResult.classList.add('visible');
+                addConfettiRainOfLogo(glideLogo);
+
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        window.addEventListener('load', async () => {
+            const query = new URLSearchParams(window.location.search);  
+            const tokenVal = query.get('token');
+            const state = query.get('state');
+            if (tokenVal && state) {
+                showStepTwo();
+                followRedirectBtn.innerHTML = 'Redirected';
+                followRedirectBtn.classList.add('disabled');
+                followFrameBtn.classList.add('disabled');
+                followPopupBtn.classList.add('disabled');
+
+                const session = await fetch('/api/get-session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ state })
+                });
+                const sessionRes = await session.json();
+                const phoneNumber = sessionRes.phoneNumber;
+                phone.value = phoneNumber;
+                tokenText.innerHTML = tokenVal;
+                    token.classList.add('visible');
+
+                    setTimeout(() => {
+                        stepThree.classList.add('visible');
+                        sendingToServer.style.display = 'block';
+                        sendTokenToServer(tokenVal);
+                    }, 1000);
+            }
+        });
+    </script>
+</body>
+</html>
