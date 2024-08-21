@@ -8,6 +8,17 @@ function addConfettiRainOfLogo(glideLogo) {
     const img = glideLogo;
     const particleSize = 25;
     const particleCount = 60;
+    const particleContainer = document.createElement('div');
+    particleContainer.style.pointerEvents = 'none';
+    particleContainer.style.position = 'fixed';
+    particleContainer.style.top = '0';
+    particleContainer.style.left = '0';
+    particleContainer.style.bottom = '0';
+    particleContainer.style.right = '0';
+    particleContainer.style.overflow = 'hidden';
+
+    document.body.appendChild(particleContainer);
+
     const particles = Array.from({ length: particleCount }).map(() => {
         const particle = document.createElement('div');
         particle.classList.add('particle');
@@ -20,7 +31,7 @@ function addConfettiRainOfLogo(glideLogo) {
         particle.style.backgroundSize = 'cover';
         particle.style.backgroundRepeat = 'no-repeat';
         particle.style.backgroundPosition = 'center';
-        document.body.appendChild(particle);
+        particleContainer.appendChild(particle);
         return particle;
     });
 
@@ -35,7 +46,6 @@ function addConfettiRainOfLogo(glideLogo) {
         particle.speed = Math.random() * 6 + 3;
         particle.top = randomY;
         particle.style.top = `${randomY}px`;
-        particle.style.zIndex = '-1'
         particle.left = randomX;
         particle.style.left = `${randomX}px`;
         particle.style.opacity = randomOpacity;

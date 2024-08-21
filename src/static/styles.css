@@ -112,7 +112,6 @@ html {
     width: 100vw;
     margin: 0;
     padding: 0;
-    overflow: hidden;
 }
 
 body {
@@ -122,9 +121,8 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
     width: 100vw;
-    overflow: hidden;
     background-color: #f0f0f0;
 }
 #appCard {
@@ -132,6 +130,7 @@ body {
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     padding: 20px;
+    margin: 20px;
     width: 600px;
     max-width: 80%;
 }
@@ -140,6 +139,7 @@ body {
     align-items: center;
     margin-bottom: 20px;
     cursor: pointer;
+    z-index: 2;
 }
 #logo {
     width: 30px;
@@ -262,6 +262,12 @@ pre {
 }
 
 @media (max-width: 600px) {
+    #followBtnContainer {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-around;
+        gap: 10px;
+    }
     .particle {
         z-index: 1;
     }
