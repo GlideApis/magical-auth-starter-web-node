@@ -51,7 +51,12 @@
         </div>
     </div>
     <script src="/utils.js"></script>
+    <script src="https://unpkg.com/web-client-sdk@1.0.15/dist/browser/web-client-sdk.min.js"></script>
     <script>
+        const client = new WebClientSDK({
+            baseURL: 'https://api.gateway-x.io',
+            timeout: 600,
+        });
         const header = document.getElementById('header');
         const phone = document.getElementById('phone');
         const loginBtn = document.getElementById('loginBtn');
@@ -128,30 +133,38 @@
             followFrameBtn.innerText = 'Loading...';
             followPopupBtn.classList.add('disabled');
             followRedirectBtn.classList.add('disabled');
-            const iframe = document.createElement('iframe');
-            iframe.src = verificationRes.flatAuthUrl;
-            iframe.style.width = '0px';
-            iframe.style.height = '0px';
-            const messageListener = (event) => {
-                if (event.origin === "https://api.gateway-x.io") {
-                    window.removeEventListener('message', messageListener);
-                    const authRes = JSON.parse(event.data);
 
+            client.authenticate(verificationRes.flatAuthUrl, {
+                method: 'iframe',
+                onTokenReceived: (tokenRes) => {
+                    console.log('Token received:', tokenRes);
                     followFrameBtn.classList.remove('loading');
                     followFrameBtn.innerText = followFrameBtn.defaultText;
 
-                    tokenText.innerHTML = authRes.token;
+                    tokenText.innerHTML = tokenRes;
                     token.classList.add('visible');
 
                     setTimeout(() => {
+                        console.log('sending to server');
                         stepThree.classList.add('visible');
                         sendingToServer.style.display = 'block';
-                        sendTokenToServer(authRes.token);
+                        sendTokenToServer(tokenRes);
                     }, 1000);
+                },
+                onError(error) {
+                    console.error('Authentication error:', error);
+                    followFrameBtn.classList.remove('loading');
+                    followFrameBtn.innerText = 'Error - Try Again';
+                    followPopupBtn.classList.remove('disabled');
+                    followRedirectBtn.classList.remove('disabled');
+
+                    responseText.innerHTML = `Authentication Error: ${error.message || 'Token retrieval failed'}`;
+                    response.classList.add('visible');
+                },
+                onComplete() {
+                    console.log('Authentication flow completed');
                 }
-            };
-            window.addEventListener('message', messageListener);
-            document.body.appendChild(iframe);
+            })
         });
 
         followPopupBtn.addEventListener('click', () => {
@@ -161,28 +174,31 @@
             followPopupBtn.innerText = 'Loading...';
             followFrameBtn.classList.add('disabled');
             followRedirectBtn.classList.add('disabled');
-            const popup = window.open(verificationRes.flatAuthUrl, 'authPopup', 'width=600,height=600');
-            const messageListener = (event) => {
-                console.log(event);
-                if (event.origin === "https://api.gateway-x.io") {
-                    window.removeEventListener('message', messageListener);
-                    const authRes = JSON.parse(event.data);
-                    popup.close();
-
+            client.authenticate(verificationRes.flatAuthUrl, {
+                method: 'popup',
+                timeout: 120000,
+                onTokenReceived: (tokenRes) => {
+                    console.log('Token received:', tokenRes);
                     followPopupBtn.classList.remove('loading');
                     followPopupBtn.innerText = followPopupBtn.defaultText;
 
-                    tokenText.innerHTML = authRes.token;
+                    tokenText.innerHTML = tokenRes;
                     token.classList.add('visible');
 
                     setTimeout(() => {
+                        console.log('sending to server');
                         stepThree.classList.add('visible');
                         sendingToServer.style.display = 'block';
-                        sendTokenToServer(authRes.token);
+                        sendTokenToServer(tokenRes);
                     }, 1000);
+                },
+                onError(error) {
+                    console.error('Authentication error:', error);
+                },
+                onComplete() {
+                    console.log('Authentication flow completed');
                 }
-            };
-            window.addEventListener('message', messageListener);
+            })
         });
 
         followRedirectBtn.addEventListener('click', () => {
@@ -192,7 +208,9 @@
             followRedirectBtn.innerText = 'Loading...';
             followFrameBtn.classList.add('disabled');
             followPopupBtn.classList.add('disabled');
-            window.location.href = verificationRes.authUrl;
+            client.authenticate(verificationRes.authUrl, {
+                method: 'redirect',
+            })
         });
 
         async function sendTokenToServer(token) {
@@ -217,7 +235,7 @@
         }
 
         window.addEventListener('load', async () => {
-            const query = new URLSearchParams(window.location.search);  
+            const query = new URLSearchParams(window.location.search);
             const tokenVal = query.get('token');
             const state = query.get('state');
             if (tokenVal && state) {
@@ -238,13 +256,13 @@
                 const phoneNumber = sessionRes.phoneNumber;
                 phone.value = phoneNumber;
                 tokenText.innerHTML = tokenVal;
-                    token.classList.add('visible');
+                token.classList.add('visible');
 
-                    setTimeout(() => {
-                        stepThree.classList.add('visible');
-                        sendingToServer.style.display = 'block';
-                        sendTokenToServer(tokenVal);
-                    }, 1000);
+                setTimeout(() => {
+                    stepThree.classList.add('visible');
+                    sendingToServer.style.display = 'block';
+                    sendTokenToServer(tokenVal);
+                }, 1000);
             }
         });
 
