@@ -3,7 +3,7 @@
 set -e
 
 # Variables
-SERVICE_NAME="magical-auth-starter"
+SERVICE_NAME="magical-auth-starter-node"
 REGION="europe-southwest1"
 
 BASH_BLUE='\033[0;34m'
